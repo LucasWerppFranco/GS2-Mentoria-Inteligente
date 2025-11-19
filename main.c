@@ -1,13 +1,17 @@
+#define _XOPEN_SOURCE 700
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <wchar.h>
+#include <locale.h>
+#include <termios.h>
+#include <unistd.h>
 
 // Definições de constantes para otimização
 #define MAX_NOME 50
-#define MAX_CURSOS 1000
-#define MAX_ALUNOS 1000
-#define MAX_INSCRICOES 10000
+#define INCREMENTO_CAPACIDADE 10  // Incremento para realloc
+#define WIDTH 60  // Largura da HUD
 
 // TAD: Struct para Curso
 typedef struct {
@@ -52,11 +56,96 @@ typedef struct {
     int tamanho;
 } Pilha;
 
-// Arrays globais para cursos e alunos (para busca e ordenação)
-Curso cursos[MAX_CURSOS];
+// Arrays dinâmicos para cursos e alunos
+Curso* cursos = NULL;
 int num_cursos = 0;
-Aluno alunos[MAX_ALUNOS];
+int capacidade_cursos = 0;
+
+Aluno* alunos = NULL;
 int num_alunos = 0;
+int capacidade_alunos = 0;
+
+// Função para calcular largura visual de string
+int visual_width(const char *s) {
+    int width = 0;
+    wchar_t wc;
+    mbstate_t state;
+    memset(&state, 0, sizeof state);
+    const char *p = s;
+
+    while (*p) {
+        size_t len = mbrtowc(&wc, p, MB_CUR_MAX, &state);
+        if (len == (size_t)-1 || len == (size_t)-2) break;
+        int w = wcwidth(wc);
+        if (w > 0) width += w;
+        p += len;
+    }
+    return width;
+}
+
+// Função para imprimir borda superior
+void print_border_top() {
+    printf("╔");
+    for (int i = 0; i < WIDTH - 2; i++) printf("═");
+    printf("╗\n");
+}
+
+// Função para imprimir borda inferior
+void print_border_bottom() {
+    printf("╚");
+    for (int i = 0; i < WIDTH - 2; i++) printf("═");
+    printf("╝\n");
+}
+
+// Função para imprimir linha com padding
+void print_line(const char *text) {
+    printf("║");
+    int content_width = visual_width(text);
+    int padding = WIDTH - 2 - content_width;
+    printf("%s", text);
+    for (int j = 0; j < padding; j++) printf(" ");
+    printf("║\n");
+}
+
+// Função para limpar buffer de entrada
+void limparBufferEntrada() {
+    int c;
+    while ((c = getchar()) != '\n' && c != EOF);
+}
+
+// Função para capturar tecla (incluindo setas)
+int capturaTecla() {
+    struct termios oldt, newt;
+    int ch;
+    tcgetattr(STDIN_FILENO, &oldt);
+    newt = oldt;
+    newt.c_lflag &= ~(ICANON | ECHO);
+    tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+    ch = getchar();
+    if (ch == 27) {
+        getchar();
+        ch = getchar();
+        if (ch == 'A') ch = 'w';
+        else if (ch == 'B') ch = 's';
+        else ch = 0;
+    }
+    tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+    return ch;
+}
+
+// Função para esperar pressionar 'q'
+void esperarPressionarQ() {
+    char input[10];
+    print_border_top();
+    print_line("Pressione 'q' para voltar ao menu...");
+    print_border_bottom();
+    do {
+        printf("> ");
+        if (fgets(input, sizeof(input), stdin)) {
+            if (input[0] == 'q' || input[0] == 'Q') break;
+        }
+    } while (1);
+}
 
 // Funções para Fila
 void inicializarFila(Fila* f) {
@@ -116,7 +205,8 @@ void empilhar(Pilha* p, const char* acao) {
         printf("Erro: Falha na alocação de memória.\n");
         return;
     }
-    strcpy(novo->acao, acao);
+    strncpy(novo->acao, acao, MAX_NOME-1);
+    novo->acao[MAX_NOME-1] = '\0';
     novo->proximo = p->topo;
     p->topo = novo;
     p->tamanho++;
@@ -124,7 +214,7 @@ void empilhar(Pilha* p, const char* acao) {
 
 char* desempilhar(Pilha* p) {
     if (pilhaVazia(p)) {
-        printf("Erro: Pilha vazia.\n");
+        // Em vez de imprimir erro fatal, apenas retorna NULL
         return NULL;
     }
     NoPilha* temp = p->topo;
@@ -184,12 +274,86 @@ int buscaLinearAluno(Aluno arr[], int n, int id) {
     return -1;
 }
 
-// Função para adicionar curso
-void adicionarCurso() {
-    if (num_cursos >= MAX_CURSOS) {
-        printf("Erro: Limite de cursos atingido.\n");
+// Função para expandir array dinâmico
+void expandirCursos() {
+    capacidade_cursos += INCREMENTO_CAPACIDADE;
+    cursos = (Curso*)realloc(cursos, capacidade_cursos * sizeof(Curso));
+    if (!cursos) {
+        printf("Erro: Falha na realocação de memória para cursos.\n");
+        exit(1);
+    }
+}
+
+void expandirAlunos() {
+    capacidade_alunos += INCREMENTO_CAPACIDADE;
+    alunos = (Aluno*)realloc(alunos, capacidade_alunos * sizeof(Aluno));
+    if (!alunos) {
+        printf("Erro: Falha na realocação de memória para alunos.\n");
+        exit(1);
+    }
+}
+
+// Função para carregar cursos do arquivo
+void carregarCursos() {
+    FILE* arquivo = fopen("cursos.txt", "r");
+    if (!arquivo) {
+        printf("Arquivo cursos.txt não encontrado. Criando novo.\n");
         return;
     }
+    char linha[256];
+    while (fgets(linha, sizeof(linha), arquivo)) {
+        if (num_cursos >= capacidade_cursos) expandirCursos();
+        sscanf(linha, "%[^,],%d,%d", cursos[num_cursos].nome, &cursos[num_cursos].duracao, &cursos[num_cursos].prioridade);
+        num_cursos++;
+    }
+    fclose(arquivo);
+}
+
+// Função para salvar cursos no arquivo
+void salvarCursos() {
+    FILE* arquivo = fopen("cursos.txt", "w");
+    if (!arquivo) {
+        printf("Erro ao abrir cursos.txt para escrita.\n");
+        return;
+    }
+    for (int i = 0; i < num_cursos; i++) {
+        fprintf(arquivo, "%s,%d,%d\n", cursos[i].nome, cursos[i].duracao, cursos[i].prioridade);
+    }
+    fclose(arquivo);
+}
+
+// Função para carregar alunos do arquivo
+void carregarAlunos() {
+    FILE* arquivo = fopen("alunos.txt", "r");
+    if (!arquivo) {
+        printf("Arquivo alunos.txt não encontrado. Criando novo.\n");
+        return;
+    }
+    char linha[256];
+    while (fgets(linha, sizeof(linha), arquivo)) {
+        if (num_alunos >= capacidade_alunos) expandirAlunos();
+        sscanf(linha, "%[^,],%d", alunos[num_alunos].nome, &alunos[num_alunos].id);
+        num_alunos++;
+    }
+    fclose(arquivo);
+}
+
+// Função para salvar alunos no arquivo
+void salvarAlunos() {
+    FILE* arquivo = fopen("alunos.txt", "w");
+    if (!arquivo) {
+        printf("Erro ao abrir alunos.txt para escrita.\n");
+        return;
+    }
+    for (int i = 0; i < num_alunos; i++) {
+        fprintf(arquivo, "%s,%d\n", alunos[i].nome, alunos[i].id);
+    }
+    fclose(arquivo);
+}
+
+// Função para adicionar curso
+void adicionarCurso() {
+    if (num_cursos >= capacidade_cursos) expandirCursos();
     printf("Nome do curso: ");
     scanf(" %[^\n]", cursos[num_cursos].nome);
     printf("Duração (horas): ");
@@ -202,10 +366,7 @@ void adicionarCurso() {
 
 // Função para adicionar aluno
 void adicionarAluno() {
-    if (num_alunos >= MAX_ALUNOS) {
-        printf("Erro: Limite de alunos atingido.\n");
-        return;
-    }
+    if (num_alunos >= capacidade_alunos) expandirAlunos();
     printf("Nome do aluno: ");
     scanf(" %[^\n]", alunos[num_alunos].nome);
     printf("ID do aluno: ");
@@ -213,7 +374,6 @@ void adicionarAluno() {
     num_alunos++;
     printf("Aluno adicionado.\n");
 }
-
 // Função para inscrever aluno em curso (adiciona à fila)
 void inscreverAluno(Fila* fila, Pilha* historico) {
     int id_aluno, index_curso;
@@ -240,7 +400,7 @@ void inscreverAluno(Fila* fila, Pilha* historico) {
     nova.timestamp = time(NULL);
     enfileirar(fila, nova);
     char acao[100];
-    sprintf(acao, "Inscrição: %s em %s", alunos[aluno_index].nome, cursos[index_curso].nome);
+    snprintf(acao, sizeof(acao), "Inscrição: %s em %s", alunos[aluno_index].nome, cursos[index_curso].nome);
     empilhar(historico, acao);
     printf("Inscrição realizada.\n");
 }
@@ -254,13 +414,14 @@ void processarInscricao(Fila* fila, Pilha* historico) {
     Inscricao processada = desenfileirar(fila);
     printf("Processando inscrição: %s em %s\n", processada.aluno.nome, cursos[processada.curso_index].nome);
     char acao[100];
-    sprintf(acao, "Processamento: %s em %s", processada.aluno.nome, cursos[processada.curso_index].nome);
+    snprintf(acao, sizeof(acao), "Processamento: %s em %s", processada.aluno.nome, cursos[processada.curso_index].nome);
     empilhar(historico, acao);
 }
 
 // Função para ordenar cursos
 void ordenarCursos() {
-    quickSort(cursos, 0, num_cursos - 1);
+    if (num_cursos > 0)
+        quickSort(cursos, 0, num_cursos - 1);
     printf("Cursos ordenados por prioridade.\n");
 }
 
@@ -288,43 +449,130 @@ void undo(Pilha* historico) {
     }
 }
 
-// Menu principal
+// --------------------
+// Programa principal
+// --------------------
 int main() {
+    setlocale(LC_ALL, "");  // Para suporte a caracteres multibyte
+
+    // Carregar dados dos arquivos
+    carregarCursos();
+    carregarAlunos();
+
     Fila fila_inscricoes;
     Pilha historico;
     inicializarFila(&fila_inscricoes);
     inicializarPilha(&historico);
 
-    int opcao;
-    do {
-        printf("\nSistema de Gerenciamento de Cursos\n");
-        printf("1. Adicionar Curso\n");
-        printf("2. Adicionar Aluno\n");
-        printf("3. Inscrever Aluno em Curso\n");
-        printf("4. Processar Inscrição\n");
-        printf("5. Ordenar Cursos por Prioridade\n");
-        printf("6. Buscar Curso por Prioridade\n");
-        printf("7. Undo Última Ação\n");
-        printf("0. Sair\n");
-        printf("Escolha: ");
-        scanf("%d", &opcao);
+    const char* opcoes[] = {
+        "Adicionar Curso",
+        "Adicionar Aluno",
+        "Inscrever Aluno em Curso",
+        "Processar Inscrição",
+        "Ordenar Cursos por Prioridade",
+        "Buscar Curso por Prioridade",
+        "Undo Última Ação",
+        "Sair"
+    };
+    int total_opcoes = 8;
+    int selected = 0;
+    int running = 1;
 
-        switch (opcao) {
-            case 1: adicionarCurso(); break;
-            case 2: adicionarAluno(); break;
-            case 3: inscreverAluno(&fila_inscricoes, &historico); break;
-            case 4: processarInscricao(&fila_inscricoes, &historico); break;
-            case 5: ordenarCursos(); break;
-            case 6: buscarCurso(); break;
-            case 7: undo(&historico); break;
-            case 0: printf("Saindo...\n"); break;
-            default: printf("Opção inválida.\n");
+    while (running) {
+        system("clear");
+        print_border_top();
+        print_line("      <=== SISTEMA DE GERENCIAMENTO DE CURSOS ===>");
+        print_line("");
+        for (int i = 0; i < total_opcoes; i++) {
+            char buffer[100];
+            if (i == selected)
+                snprintf(buffer, sizeof(buffer), " < %s >", opcoes[i]);
+            else
+                snprintf(buffer, sizeof(buffer), "    %s   ", opcoes[i]);
+            print_line(buffer);
         }
-    } while (opcao != 0);
+        print_line("");
+        print_line("Use as setas ou W/S para navegar, Enter para selecionar.");
+        print_border_bottom();
 
-    // Liberar memória (otimização: evitar vazamentos)
-    while (!filaVazia(&fila_inscricoes)) desenfileirar(&fila_inscricoes);
-    while (!pilhaVazia(&historico)) free(desempilhar(&historico));
+        int tecla = capturaTecla();
+
+        if (tecla == 'w') {
+            selected = (selected - 1 + total_opcoes) % total_opcoes;
+        } else if (tecla == 's') {
+            selected = (selected + 1) % total_opcoes;
+        } else if (tecla == '\n' || tecla == '\r') {
+            switch (selected) {
+                case 0:
+                    adicionarCurso();
+                    esperarPressionarQ();
+                    break;
+                case 1:
+                    adicionarAluno();
+                    esperarPressionarQ();
+                    break;
+                case 2:
+                    inscreverAluno(&fila_inscricoes, &historico);
+                    esperarPressionarQ();
+                    break;
+                case 3:
+                    processarInscricao(&fila_inscricoes, &historico);
+                    esperarPressionarQ();
+                    break;
+                case 4:
+                    ordenarCursos();
+                    esperarPressionarQ();
+                    break;
+                case 5:
+                    buscarCurso();
+                    esperarPressionarQ();
+                    break;
+                case 6:
+                    undo(&historico);
+                    esperarPressionarQ();
+                    break;
+                case 7:
+                    // Salvar dados antes de sair
+                    salvarCursos();
+                    salvarAlunos();
+
+                    // Liberar memória da fila sem imprimir/processar
+                    while (fila_inscricoes.frente != NULL) {
+                        NoFila* tmp = fila_inscricoes.frente;
+                        fila_inscricoes.frente = tmp->proximo;
+                        free(tmp);
+                    }
+                    fila_inscricoes.tras = NULL;
+                    fila_inscricoes.tamanho = 0;
+
+                    // Liberar memória da pilha
+                    while (historico.topo != NULL) {
+                        NoPilha* tmp = historico.topo;
+                        historico.topo = tmp->proximo;
+                        free(tmp);
+                    }
+                    historico.tamanho = 0;
+
+                    // Liberar arrays dinâmicos
+                    if (cursos) {
+                        free(cursos);
+                        cursos = NULL;
+                        num_cursos = 0;
+                        capacidade_cursos = 0;
+                    }
+                    if (alunos) {
+                        free(alunos);
+                        alunos = NULL;
+                        num_alunos = 0;
+                        capacidade_alunos = 0;
+                    }
+
+                    printf("Saindo... Dados salvos.\n");
+                    running = 0;
+                    break;
+            }
+        }
+    }
 
     return 0;
 }
