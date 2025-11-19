@@ -21,7 +21,7 @@
 -~--~                   ~---__|,--~'                  ~~----_____-~'
 ```
 
-Nesta atividade foi solicitado o uso de IAs como apoio ao raciocínio algorítmico na criação de um programa a nossa escolha com o tema "O Futuro do Trabalho". Eu utilizei o [blackbox.ai]{https://www.blackbox.ai/} para para elaborar essa etapa utilizando engenharia de prompt para garantir o funcioinamento e a otimização do programa.
+Nesta atividade foi solicitado o uso de IAs como apoio ao raciocínio algorítmico na criação de um programa a nossa escolha com o tema "O Futuro do Trabalho". Eu utilizei o [blackbox.ai](https://www.blackbox.ai/) para para elaborar essa etapa utilizando engenharia de prompt para garantir o funcioinamento e a otimização do programa.
 
 ## Prompt Utilizado:
 
