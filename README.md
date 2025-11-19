@@ -60,6 +60,27 @@ Tanto as explicaçoes quanto o código estão divididos com base nas técnicas q
     
 - **Funcionalidades**: O programa permite adicionar cursos/alunos, inscrever (enfileirar), processar (desenfileirar), ordenar, buscar e undo. É completo e focado em eficiência.
 
+# Rodando o Programa
+
+O código gerado pelo agente de IA pode ser compilado normalmente
+
+```
+gcc -O prompt.c
+```
+
+A versão finl utiliz-se de um arquitetura ja utilizada por mim em outros projetos que necessita de um sistema operacional Linux, mas para economizar o seu tempo eu criei um Dockerfile com tudo necessario para rodar o programa, bast utilizar essa sequencia de comandos:
+
+```
+docker build -t sistema-cursos .                     
+docker run -it sistema-cursos
+```
+
+Caso queira compilar na sua mquina, disponibilizarei o comando para compilar a versão final aqui
+
+```
+apt-get update && apt-get install -y
+```
+
 # EXTRA
 
 Como um projeto extra para somar na GS, eu desenvolvi um programa de mentoria inteligente em C utilizando o Gemini para encontrar o melhor mentor que atenda os requisitos que melhor atenda seu mentorado.
