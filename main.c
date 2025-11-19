@@ -10,30 +10,26 @@
 
 // Definições de constantes para otimização
 #define MAX_NOME 50
-#define INCREMENTO_CAPACIDADE 10  // Incremento para realloc
-#define WIDTH 60  // Largura da HUD
+#define INCREMENTO_CAPACIDADE 10 
+#define WIDTH 60
 
-// TAD: Struct para Curso
 typedef struct {
     char nome[MAX_NOME];
-    int duracao; // em horas
-    int prioridade; // 1-10, maior prioridade primeiro
+    int duracao;
+    int prioridade;
 } Curso;
 
-// TAD: Struct para Aluno
 typedef struct {
     char nome[MAX_NOME];
     int id;
 } Aluno;
 
-// TAD: Struct para Inscricao (elemento da fila)
 typedef struct {
     Aluno aluno;
-    int curso_index; // índice do curso no array de cursos
-    time_t timestamp; // para ordenação por tempo de chegada
+    int curso_index;
+    time_t timestamp;
 } Inscricao;
 
-// TAD: Fila (usando lista ligada para eficiência em inserções/removências)
 typedef struct NoFila {
     Inscricao inscricao;
     struct NoFila* proximo;
@@ -45,9 +41,8 @@ typedef struct {
     int tamanho;
 } Fila;
 
-// TAD: Pilha (usando lista ligada para eficiência)
 typedef struct NoPilha {
-    char acao[MAX_NOME]; // descrição da ação para undo
+    char acao[MAX_NOME];
     struct NoPilha* proximo;
 } NoPilha;
 
@@ -56,7 +51,6 @@ typedef struct {
     int tamanho;
 } Pilha;
 
-// Arrays dinâmicos para cursos e alunos
 Curso* cursos = NULL;
 int num_cursos = 0;
 int capacidade_cursos = 0;
@@ -65,7 +59,6 @@ Aluno* alunos = NULL;
 int num_alunos = 0;
 int capacidade_alunos = 0;
 
-// Função para calcular largura visual de string
 int visual_width(const char *s) {
     int width = 0;
     wchar_t wc;
@@ -83,21 +76,18 @@ int visual_width(const char *s) {
     return width;
 }
 
-// Função para imprimir borda superior
 void print_border_top() {
     printf("╔");
     for (int i = 0; i < WIDTH - 2; i++) printf("═");
     printf("╗\n");
 }
 
-// Função para imprimir borda inferior
 void print_border_bottom() {
     printf("╚");
     for (int i = 0; i < WIDTH - 2; i++) printf("═");
     printf("╝\n");
 }
 
-// Função para imprimir linha com padding
 void print_line(const char *text) {
     printf("║");
     int content_width = visual_width(text);
@@ -107,13 +97,11 @@ void print_line(const char *text) {
     printf("║\n");
 }
 
-// Função para limpar buffer de entrada
 void limparBufferEntrada() {
     int c;
     while ((c = getchar()) != '\n' && c != EOF);
 }
 
-// Função para capturar tecla (incluindo setas)
 int capturaTecla() {
     struct termios oldt, newt;
     int ch;
@@ -133,7 +121,6 @@ int capturaTecla() {
     return ch;
 }
 
-// Função para esperar pressionar 'q'
 void esperarPressionarQ() {
     char input[10];
     print_border_top();
@@ -147,7 +134,6 @@ void esperarPressionarQ() {
     } while (1);
 }
 
-// Funções para Fila
 void inicializarFila(Fila* f) {
     f->frente = NULL;
     f->tras = NULL;
@@ -189,7 +175,6 @@ Inscricao desenfileirar(Fila* f) {
     return inscricao;
 }
 
-// Funções para Pilha
 void inicializarPilha(Pilha* p) {
     p->topo = NULL;
     p->tamanho = 0;
@@ -214,7 +199,6 @@ void empilhar(Pilha* p, const char* acao) {
 
 char* desempilhar(Pilha* p) {
     if (pilhaVazia(p)) {
-        // Em vez de imprimir erro fatal, apenas retorna NULL
         return NULL;
     }
     NoPilha* temp = p->topo;
@@ -226,7 +210,6 @@ char* desempilhar(Pilha* p) {
     return acao;
 }
 
-// Algoritmo de Ordenação: QuickSort para cursos por prioridade (otimizado)
 void trocar(Curso* a, Curso* b) {
     Curso temp = *a;
     *a = *b;
@@ -237,7 +220,7 @@ int particionar(Curso arr[], int baixo, int alto) {
     int pivo = arr[alto].prioridade;
     int i = baixo - 1;
     for (int j = baixo; j < alto; j++) {
-        if (arr[j].prioridade >= pivo) { // Maior prioridade primeiro
+        if (arr[j].prioridade >= pivo) {
             i++;
             trocar(&arr[i], &arr[j]);
         }
@@ -254,7 +237,6 @@ void quickSort(Curso arr[], int baixo, int alto) {
     }
 }
 
-// Algoritmo de Busca: Busca Binária para cursos (assume ordenado por prioridade)
 int buscaBinariaCurso(Curso arr[], int n, int prioridade) {
     int baixo = 0, alto = n - 1;
     while (baixo <= alto) {
@@ -266,7 +248,6 @@ int buscaBinariaCurso(Curso arr[], int n, int prioridade) {
     return -1;
 }
 
-// Busca Linear para alunos (não ordenado)
 int buscaLinearAluno(Aluno arr[], int n, int id) {
     for (int i = 0; i < n; i++) {
         if (arr[i].id == id) return i;
@@ -274,7 +255,6 @@ int buscaLinearAluno(Aluno arr[], int n, int id) {
     return -1;
 }
 
-// Função para expandir array dinâmico
 void expandirCursos() {
     capacidade_cursos += INCREMENTO_CAPACIDADE;
     cursos = (Curso*)realloc(cursos, capacidade_cursos * sizeof(Curso));
@@ -293,7 +273,6 @@ void expandirAlunos() {
     }
 }
 
-// Função para carregar cursos do arquivo
 void carregarCursos() {
     FILE* arquivo = fopen("cursos.txt", "r");
     if (!arquivo) {
@@ -309,7 +288,6 @@ void carregarCursos() {
     fclose(arquivo);
 }
 
-// Função para salvar cursos no arquivo
 void salvarCursos() {
     FILE* arquivo = fopen("cursos.txt", "w");
     if (!arquivo) {
@@ -322,7 +300,6 @@ void salvarCursos() {
     fclose(arquivo);
 }
 
-// Função para carregar alunos do arquivo
 void carregarAlunos() {
     FILE* arquivo = fopen("alunos.txt", "r");
     if (!arquivo) {
@@ -338,7 +315,6 @@ void carregarAlunos() {
     fclose(arquivo);
 }
 
-// Função para salvar alunos no arquivo
 void salvarAlunos() {
     FILE* arquivo = fopen("alunos.txt", "w");
     if (!arquivo) {
@@ -351,7 +327,6 @@ void salvarAlunos() {
     fclose(arquivo);
 }
 
-// Função para adicionar curso
 void adicionarCurso() {
     if (num_cursos >= capacidade_cursos) expandirCursos();
     printf("Nome do curso: ");
@@ -364,7 +339,6 @@ void adicionarCurso() {
     printf("Curso adicionado.\n");
 }
 
-// Função para adicionar aluno
 void adicionarAluno() {
     if (num_alunos >= capacidade_alunos) expandirAlunos();
     printf("Nome do aluno: ");
@@ -374,7 +348,6 @@ void adicionarAluno() {
     num_alunos++;
     printf("Aluno adicionado.\n");
 }
-// Função para inscrever aluno em curso (adiciona à fila)
 void inscreverAluno(Fila* fila, Pilha* historico) {
     int id_aluno, index_curso;
     printf("ID do aluno: ");
@@ -405,7 +378,6 @@ void inscreverAluno(Fila* fila, Pilha* historico) {
     printf("Inscrição realizada.\n");
 }
 
-// Função para processar inscrição (remover da fila)
 void processarInscricao(Fila* fila, Pilha* historico) {
     if (filaVazia(fila)) {
         printf("Nenhuma inscrição para processar.\n");
@@ -418,14 +390,12 @@ void processarInscricao(Fila* fila, Pilha* historico) {
     empilhar(historico, acao);
 }
 
-// Função para ordenar cursos
 void ordenarCursos() {
     if (num_cursos > 0)
         quickSort(cursos, 0, num_cursos - 1);
     printf("Cursos ordenados por prioridade.\n");
 }
 
-// Função para buscar curso
 void buscarCurso() {
     int prioridade;
     printf("Prioridade do curso: ");
@@ -438,7 +408,6 @@ void buscarCurso() {
     }
 }
 
-// Função para undo (usando pilha)
 void undo(Pilha* historico) {
     char* acao = desempilhar(historico);
     if (acao) {
@@ -449,13 +418,9 @@ void undo(Pilha* historico) {
     }
 }
 
-// --------------------
-// Programa principal
-// --------------------
 int main() {
-    setlocale(LC_ALL, "");  // Para suporte a caracteres multibyte
+    setlocale(LC_ALL, "");
 
-    // Carregar dados dos arquivos
     carregarCursos();
     carregarAlunos();
 
@@ -532,11 +497,9 @@ int main() {
                     esperarPressionarQ();
                     break;
                 case 7:
-                    // Salvar dados antes de sair
                     salvarCursos();
                     salvarAlunos();
 
-                    // Liberar memória da fila sem imprimir/processar
                     while (fila_inscricoes.frente != NULL) {
                         NoFila* tmp = fila_inscricoes.frente;
                         fila_inscricoes.frente = tmp->proximo;
@@ -545,7 +508,6 @@ int main() {
                     fila_inscricoes.tras = NULL;
                     fila_inscricoes.tamanho = 0;
 
-                    // Liberar memória da pilha
                     while (historico.topo != NULL) {
                         NoPilha* tmp = historico.topo;
                         historico.topo = tmp->proximo;
@@ -553,7 +515,6 @@ int main() {
                     }
                     historico.tamanho = 0;
 
-                    // Liberar arrays dinâmicos
                     if (cursos) {
                         free(cursos);
                         cursos = NULL;
